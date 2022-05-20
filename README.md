@@ -1,5 +1,5 @@
 # Running
-g++ -std=c++2a -o mbta main.cc -lcurl && ./mbta
+`g++ -std=c++2a -o mbta main.cc -lcurl && ./mbta`
 
 You'll need to be able to link lcurl; on Ubuntu 20.04 `apt install libcurl4-openssl-dev`.
 
