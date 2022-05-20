@@ -34,8 +34,14 @@ std::string apiKey()
   // to avoid static init order fiasco - obviously overkill here, but it's the
   // type of thing you want to just have a blanket policy for.
   static std::string* key = new std::string;
+  try
+  {
+    if (key->empty())
+      *key = readStringFile("api_key.txt");
+  }
+  catch(const std::exception& e) {} // should still work even without a key
   if (key->empty())
-    *key = readStringFile("api_key.txt");
+    std::cerr << "Couldn't read api_key.txt. That's ok; we'll just be rate limited." << std::endl;
   return *key;
 }
 
@@ -54,7 +60,8 @@ std::string curlMBTA(std::string url)
   std::string auth_header = "Authorization: " + apiKey();
   struct curl_slist* list = NULL;
   list = curl_slist_append(list, "Accept: application/json");
-  list = curl_slist_append(list, auth_header.c_str());
+  if (!apiKey().empty())
+    list = curl_slist_append(list, auth_header.c_str());
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
