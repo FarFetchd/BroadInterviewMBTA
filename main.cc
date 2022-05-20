@@ -151,7 +151,7 @@ public:
     // tell us what routes are viable, as well as when we are forced to switch.
     int station_index = 0;
     std::vector<std::string> routes_to_travel;
-    while (station_index < our_path.size() - 1)
+    while (station_index < our_path.size())
     {
       auto [route_name, next_stop_ind] = greedilyStayOnRoute(our_path, station_index);
       station_index = next_stop_ind;
@@ -205,10 +205,12 @@ private:
                             routes_of_stop_[path[station_index]].begin(),
                             routes_of_stop_[path[station_index]].end(),
                             std::inserter(new_candidates, new_candidates.begin()));
-      if (station_index >= path.size() - 1 || new_candidates.empty())
+      if (new_candidates.empty())
         return std::make_pair(*candidates.begin(), station_index);
       station_index++;
       candidates = new_candidates;
+      if (station_index >= path.size())
+        return std::make_pair(*candidates.begin(), station_index);
     }
   }
 
