@@ -125,6 +125,8 @@ public:
   : adjacency_lists_(adjacency_lists),
     routes_of_stop_(routes_of_stop) {}
 
+  // Returns the list of line names (e.g. Red, Orange) you should take to get
+  // from the station 'src' to 'dst'.
   std::vector<std::string> plotRouteFromTo(std::string src, std::string dst)
   {
     if (!routes_of_stop_.contains(src))
@@ -214,7 +216,9 @@ private:
     }
   }
 
+  // the edges of the MBTA graph (stops being nodes), as adjacency list.
   std::unordered_map<std::string, std::vector<std::string>> adjacency_lists_;
+  // which routes does this stop appear in? e.g. Downtown Crossing maps to {red, orange}.
   std::unordered_map<std::string, std::set<std::string>> routes_of_stop_;
 };
 
@@ -226,9 +230,7 @@ int main(int argc, char** argv)
   std::vector<std::string> route_ids = getRouteIDs(routes_json);
   std::string route_query_prefix = "https://api-v3.mbta.com/stops?filter[route]=";
 
-  // the edges of the MBTA graph (stops being nodes), as adjacency list.
   std::unordered_map<std::string, std::vector<std::string>> adjacency_lists;
-  // which routes does this stop appear in? e.g. Downtown Crossing maps to {red, orange}.
   std::unordered_map<std::string, std::set<std::string>> routes_of_stop;
 
   int most_stops_count = 0;
@@ -296,6 +298,7 @@ int main(int argc, char** argv)
     }
   }
 
+  // question 3
   RoutePlanner planner(adjacency_lists, routes_of_stop);
   std::cout << "================================================\n\n"
             << "Now we'll plan some routes!\n";
