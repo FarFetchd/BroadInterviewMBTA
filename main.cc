@@ -117,132 +117,107 @@ std::vector<std::string> getStops(nlohmann::json stops_json)
   return ret;
 }
 
-// BFS, tracking backlinks. Returns a map of backlinks:
-// backlinks[backlinks[...[dst]...]] gets you back to src.
-std::unordered_map<std::string, std::string> backlinksBFS(
-    std::unordered_map<std::string, std::vector<std::string>>& adjacency_lists,
-    std::string src, std::string dst)
+class RoutePlanner
 {
-  std::unordered_map<std::string, std::string> backlinks;
-  std::unordered_set<std::string> visited;
-  std::queue<std::string> to_visit;
-  to_visit.push(src);
-  while (!to_visit.empty() && to_visit.front() != dst)
+public:
+  RoutePlanner(std::unordered_map<std::string, std::vector<std::string>> adjacency_lists,
+               std::unordered_map<std::string, std::set<std::string>> routes_of_stop)
+  : adjacency_lists_(adjacency_lists),
+    routes_of_stop_(routes_of_stop) {}
+
+  std::vector<std::string> plotRouteFromTo(std::string src, std::string dst)
   {
-    std::string cur = to_visit.front();
-    to_visit.pop();
-    visited.insert(cur);
-    for (std::string const& neighbor : adjacency_lists[cur])
+    if (!routes_of_stop_.contains(src))
+      crash(src + ": no such stop.");
+    if (!routes_of_stop_.contains(dst))
+      crash(dst + ": no such stop.");
+
+    std::unordered_map<std::string, std::string> backlinks =
+        backlinksBFS(adjacency_lists_, src, dst);
+
+    // assemble path from backlinks
+    std::vector<std::string> our_path;
+    std::string cur_hop = dst;
+    do
     {
-      if (visited.contains(neighbor))
-        continue;
-      to_visit.push(neighbor);
-      backlinks[neighbor] = cur;
-    }
-  }
-  if (to_visit.empty())
-    crash("Can't get to "+src+" from "+dst);
-  return backlinks;
-}
-
-std::string routeSetToStr(std::set<std::string> const& routes_of_stop)
-{
-  std::string ret = "{";
-  for (std::string route : routes_of_stop)
-    ret += route + ", ";
-  return ret + "}";
-}
-
-std::pair<std::string, int> greedilyStayOnRoute(
-    std::vector<std::string> const& stops, int stop_index,
-    std::unordered_map<std::string, std::set<std::string>>& routes_of_stop)
-{
-  std::set<std::string> candidates = routes_of_stop[stops[stop_index++]];
-  std::cout << "begin greedilyStayOnRoute. init candidates: "<<routeSetToStr(candidates)<<std::endl;
-  while (true)
-  {
-    std::cout << "candidates of "<<stops[stop_index]<<": "<<routeSetToStr(routes_of_stop[stops[stop_index]])<<std::endl;
-    std::set<std::string> new_candidates;
-    std::set_intersection(candidates.begin(), candidates.end(),
-                          routes_of_stop[stops[stop_index]].begin(),
-                          routes_of_stop[stops[stop_index]].end(),
-                          std::inserter(new_candidates, new_candidates.begin()));
-    std::cout << "resulting intersection: "<<routeSetToStr(new_candidates)<<std::endl;
-    if (stop_index >= stops.size() - 1 || new_candidates.empty())
-    {
-      std::cout<<"returning "<<*candidates.begin();
-      return std::make_pair(*candidates.begin(), stop_index);
-    }
-    stop_index++;
-    candidates = new_candidates;
-  }
-}
-
-// This would become a method of a class that loads in adjacency_lists and
-// routes_of_stop at construction, if this was going to evolve beyond a job
-// interview code sample thingy.
-std::vector<std::string> plotRouteFromTo(
-    std::string src, std::string dst,
-    std::unordered_map<std::string, std::vector<std::string>>& adjacency_lists,
-    std::unordered_map<std::string, std::set<std::string>>& routes_of_stop)
-{
-  if (!routes_of_stop.contains(src))
-    crash(src + ": no such stop.");
-  if (!routes_of_stop.contains(dst))
-    crash(dst + ": no such stop.");
-
-  std::unordered_map<std::string, std::string> backlinks = backlinksBFS(adjacency_lists, src, dst);
-
-  // assemble path from backlinks
-  std::vector<std::string> our_path;
-  std::string cur_hop = dst;
-  do
-  {
+      our_path.push_back(cur_hop);
+      cur_hop = backlinks[cur_hop];
+    } while (cur_hop != src);
     our_path.push_back(cur_hop);
-    cur_hop = backlinks[cur_hop];
-  } while (cur_hop != src);
-  our_path.push_back(cur_hop);
-  std::reverse(our_path.begin(), our_path.end());
+    std::reverse(our_path.begin(), our_path.end());
 
-  // We have our_path in stops. Now, to convert stops to routes, let's greedily
-  // stay on the same starting route as long as possible. Set intersection will
-  // tell us what routes are viable, as well as when we are forced to switch.
-  int stop_index = 0;
-  std::vector<std::string> routes_to_travel;
-  while (stop_index < our_path.size() - 1)
-  {
-    auto [route_name, next_stop_ind] = greedilyStayOnRoute(our_path, stop_index, routes_of_stop);
-    stop_index = next_stop_ind;
-    routes_to_travel.push_back(route_name);
+    // We have our_path in stops. Now, to convert stops to routes, let's greedily
+    // stay on the same starting route as long as possible. Set intersection will
+    // tell us what routes are viable, as well as when we are forced to switch.
+    int station_index = 0;
+    std::vector<std::string> routes_to_travel;
+    while (station_index < our_path.size() - 1)
+    {
+      auto [route_name, next_stop_ind] = greedilyStayOnRoute(our_path, station_index);
+      station_index = next_stop_ind;
+      routes_to_travel.push_back(route_name);
+    }
+    return routes_to_travel;
   }
 
+private:
 
-  std::cout<<"DEBUG:"<<std::endl;
-  for(auto x : our_path)
-    std::cout<<x<<std::endl;
+  // BFS, tracking backlinks. Returns a map of backlinks:
+  // backlinks[backlinks[...[dst]...]] gets you back to src.
+  std::unordered_map<std::string, std::string> backlinksBFS(
+      std::unordered_map<std::string, std::vector<std::string>>& adjacency_lists,
+      std::string src, std::string dst)
+  {
+    std::unordered_map<std::string, std::string> backlinks;
+    std::unordered_set<std::string> visited;
+    std::queue<std::string> to_visit;
+    to_visit.push(src);
+    while (!to_visit.empty() && to_visit.front() != dst)
+    {
+      std::string cur = to_visit.front();
+      to_visit.pop();
+      visited.insert(cur);
+      for (std::string const& neighbor : adjacency_lists[cur])
+      {
+        if (visited.contains(neighbor))
+          continue;
+        to_visit.push(neighbor);
+        backlinks[neighbor] = cur;
+      }
+    }
+    if (to_visit.empty())
+      crash("Can't get to "+src+" from "+dst);
+    return backlinks;
+  }
 
+  // Starting from path[station_index], return the name of the line that you can
+  // stay on for the most stations in this path. Also returns the index where
+  // you have to switch to a new line - meaning you should call this function
+  // again on that index.
+  std::pair<std::string, int> greedilyStayOnRoute(std::vector<std::string> const& path,
+                                                  int station_index)
+  {
+    std::set<std::string> candidates = routes_of_stop_[path[station_index++]];
+    while (true)
+    {
+      std::set<std::string> new_candidates;
+      std::set_intersection(candidates.begin(), candidates.end(),
+                            routes_of_stop_[path[station_index]].begin(),
+                            routes_of_stop_[path[station_index]].end(),
+                            std::inserter(new_candidates, new_candidates.begin()));
+      if (station_index >= path.size() - 1 || new_candidates.empty())
+        return std::make_pair(*candidates.begin(), station_index);
+      station_index++;
+      candidates = new_candidates;
+    }
+  }
 
-  return routes_to_travel;
-}
+  std::unordered_map<std::string, std::vector<std::string>> adjacency_lists_;
+  std::unordered_map<std::string, std::set<std::string>> routes_of_stop_;
+};
 
 int main(int argc, char** argv)
 {
-  // There's a great library called structopt I would use here if it weren't
-  // overkill that would actually make the code (and usage) overall more complex.
-  if (argc != 1 && argc != 3)
-  {
-    crash("Supply 0 arguments to get an MBTA overview, or 2 arguments (station names) "
-          "to get the fewest-stop path from A to B. Enclose station names containing "
-          "spaces in double quotes.");
-  }
-  bool show_question_1_and_2 = (argc == 1);
-  std::string from_stop, to_stop;
-  if (argc == 3)
-  {
-    from_stop = argv[1];
-    to_stop = argv[2];
-  }
-
   nlohmann::json routes_json = queryAndParse("https://api-v3.mbta.com/routes?filter[type]=0,1");
 
   // gathering and structuring data for questions 2 and 3
@@ -290,46 +265,52 @@ int main(int argc, char** argv)
     }
   }
 
-  if (show_question_1_and_2)
+  std::cout << "\n First, here's a list of all stop names, to help with "
+            << "getting the input for the shortest-path query mode right:\n";
+  for (auto const& [stop, junk] : routes_of_stop)
+    std::cout << stop << std::endl;
+  std::cout << "\n(end of list of all stop names)\n\n";
+
+  // question 1
+  printRouteLongNames(routes_json);
+
+  // question 2
+  std::cout << most_stops_route << " has the most stops: " << most_stops_count << std::endl;
+  std::cout << fewest_stops_route << " has the fewest stops: " << fewest_stops_count << std::endl;
+  // NOTE: I'm using an algorithmic interpretations of "connects the routes" rather
+  // than human/intuitive, meaning that any green line stop that multiple sub-lines
+  // flow through is considered a "connection" of all of them, rather than just
+  // "Copley, Arlington etc are on the trunk of the green line."
+  std::cout << "\nHere are all stops that connect routes:\n"
+            << "================================================\n";
+  for (auto const& [stop, routes] : routes_of_stop)
   {
-    std::cout << "\n First, here's a list of all stop names, to help with "
-              << "getting the input for the shortest-path query mode right:\n";
-    for (auto const& [stop, junk] : routes_of_stop)
-      std::cout << stop << std::endl;
-    std::cout << "\n(end of list of all stop names)\n\n";
-
-    // question 1
-    printRouteLongNames(routes_json);
-
-    // question 2
-    std::cout << most_stops_route << " has the most stops: " << most_stops_count << std::endl;
-    std::cout << fewest_stops_route << " has the fewest stops: " << fewest_stops_count << std::endl;
-    // NOTE: I'm using an algorithmic interpretations of "connects the routes" rather
-    // than human/intuitive, meaning that any green line stop that multiple sub-lines
-    // flow through is considered a "connection" of all of them, rather than just
-    // "Copley, Arlington etc are on the trunk of the green line."
-    std::cout << "\nHere are all stops that connect routes:\n"
-              << "================================================\n";
-    for (auto const& [stop, routes] : routes_of_stop)
+    if (routes.size() > 1)
     {
-      if (routes.size() > 1)
-      {
-        std::cout << stop << " connects: ";
-        for (std::string route : routes)
-          std::cout << route << ", ";
-        std::cout << std::endl;
-      }
+      std::cout << stop << " connects: ";
+      for (std::string route : routes)
+        std::cout << route << ", ";
+      std::cout << std::endl;
     }
   }
-  else
+
+  RoutePlanner planner(adjacency_lists, routes_of_stop);
+  std::cout << "================================================\n\n"
+            << "Now we'll plan some routes!\n";
+  while (true)
   {
-    std::vector<std::string> routes_to_travel =
-        plotRouteFromTo(from_stop, to_stop, adjacency_lists, routes_of_stop);
+    std::cout << "Enter 'from' station: " << std::flush;
+    std::string from_stop;
+    std::getline(std::cin, from_stop);
+    std::cout << "Enter 'to' station: " << std::flush;
+    std::string to_stop;
+    std::getline(std::cin, to_stop);
+
+    std::vector<std::string> routes_to_travel = planner.plotRouteFromTo(from_stop, to_stop);
     std::cout << from_stop << " to " << to_stop << " -> ";
     for (std::string route : routes_to_travel)
       std::cout << route << ", ";
     std::cout << std::endl;
   }
-
   return 0;
 }
