@@ -119,9 +119,23 @@ std::vector<std::string> getStops(nlohmann::json stops_json)
 
 int main(int argc, char** argv)
 {
-  // question 1
+  // There's a great library called structopt I would use here if it weren't
+  // overkill that would actually make the code (and usage) overall more complex.
+  if (argc != 1 && argc != 3)
+  {
+    crash("Supply 0 arguments to get an MBTA overview, or 2 arguments (station names) "
+          "to get the fewest-stop path from A to B. Enclose station names containing "
+          "spaces in double quotes.");
+  }
+  bool show_question_1_and_2 = (argc == 1);
+  std::string from_stop, to_stop;
+  if (argc == 3)
+  {
+    from_stop = argv[1];
+    to_stop = argv[2];
+  }
+
   nlohmann::json routes_json = queryAndParse("https://api-v3.mbta.com/routes?filter[type]=0,1");
-  printRouteLongNames(routes_json);
 
   // gathering and structuring data for questions 2 and 3
   std::vector<std::string> route_ids = getRouteIDs(routes_json);
@@ -168,23 +182,35 @@ int main(int argc, char** argv)
     }
   }
 
-  // question 2
-  // NOTE: I'm using an algorithmic interpretations of "connects the routes" rather
-  // than human/intuitive, meaning that any green line stop that multiple sub-lines
-  // flow through is considered a "connection" of all of them, rather than just
-  // "Copley, Arlington etc are on the trunk of the green line."
-  std::cout << most_stops_route << " has the most stops: " << most_stops_count << std::endl;
-  std::cout << fewest_stops_route << " has the fewest stops: " << fewest_stops_count << std::endl;
-  std::cout << std::endl << "Here are all stops that connect routes:\n"
-            << "================================================" << std::endl;
-  for (auto const& [stop, routes] : routes_of_stop)
+  if (show_question_1_and_2)
   {
-    if (routes.size() > 1)
+    std::cout << "\n First, here's a list of all stop names, to help with "
+              << "getting the input for the shortest-path query mode right:\n";
+    for (auto const& [stop, junk] : routes_of_stop)
+      std::cout << stop << std::endl;
+    std::cout << "\n(end of list of all stop names)\n\n";
+
+    // question 1
+    printRouteLongNames(routes_json);
+
+    // question 2
+    std::cout << most_stops_route << " has the most stops: " << most_stops_count << std::endl;
+    std::cout << fewest_stops_route << " has the fewest stops: " << fewest_stops_count << std::endl;
+    // NOTE: I'm using an algorithmic interpretations of "connects the routes" rather
+    // than human/intuitive, meaning that any green line stop that multiple sub-lines
+    // flow through is considered a "connection" of all of them, rather than just
+    // "Copley, Arlington etc are on the trunk of the green line."
+    std::cout << "\nHere are all stops that connect routes:\n"
+              << "================================================\n";
+    for (auto const& [stop, routes] : routes_of_stop)
     {
-      std::cout << stop << " connects the following routes: ";
-      for (std::string route : routes)
-        std::cout << route << ", ";
-      std::cout << std::endl;
+      if (routes.size() > 1)
+      {
+        std::cout << stop << " connects: ";
+        for (std::string route : routes)
+          std::cout << route << ", ";
+        std::cout << std::endl;
+      }
     }
   }
 
