@@ -145,21 +145,36 @@ std::unordered_map<std::string, std::string> backlinksBFS(
   return backlinks;
 }
 
+std::string routeSetToStr(std::set<std::string> const& routes_of_stop)
+{
+  std::string ret = "{";
+  for (std::string route : routes_of_stop)
+    ret += route + ", ";
+  return ret + "}";
+}
+
 std::pair<std::string, int> greedilyStayOnRoute(
     std::vector<std::string> const& stops, int stop_index,
     std::unordered_map<std::string, std::set<std::string>>& routes_of_stop)
 {
   std::set<std::string> candidates = routes_of_stop[stops[stop_index++]];
+  std::cout << "begin greedilyStayOnRoute. init candidates: "<<routeSetToStr(candidates)<<std::endl;
   while (true)
   {
+    std::cout << "candidates of "<<stops[stop_index]<<": "<<routeSetToStr(routes_of_stop[stops[stop_index]])<<std::endl;
     std::set<std::string> new_candidates;
     std::set_intersection(candidates.begin(), candidates.end(),
                           routes_of_stop[stops[stop_index]].begin(),
                           routes_of_stop[stops[stop_index]].end(),
                           std::inserter(new_candidates, new_candidates.begin()));
+    std::cout << "resulting intersection: "<<routeSetToStr(new_candidates)<<std::endl;
     if (stop_index >= stops.size() - 1 || new_candidates.empty())
+    {
+      std::cout<<"returning "<<*candidates.begin();
       return std::make_pair(*candidates.begin(), stop_index);
+    }
     stop_index++;
+    candidates = new_candidates;
   }
 }
 
