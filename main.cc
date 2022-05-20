@@ -9,7 +9,7 @@
 
 // ================= BEGIN boring mechanical stuff ============================
 
-void crash(const char* s)
+void crash(std::string s)
 {
   std::cerr << s << std::endl;
   exit(1);
@@ -75,9 +75,7 @@ nlohmann::json queryAndParse(std::string url)
   }
   catch(const std::exception& e)
   {
-    std::cerr << "failed to parse queryAndParse() JSON response; its raw text: "
-              << response_body << std::endl;
-    crash("failed to parse JSON response");
+    crash("failed to parse queryAndParse() JSON response: " + response_body);
   }
   return ret;
 }
@@ -115,6 +113,20 @@ std::vector<std::string> getStops(nlohmann::json stops_json)
   for (auto const& item : stops_json["data"])
     ret.push_back(item["attributes"]["name"].get<std::string>());
   return ret;
+}
+
+// This would become a method of a class that loads in adjacency_lists and
+// routes_of_stop at construction, if this was going to evolve beyond a job
+// interview code sample thingy.
+void plotRouteFromTo(
+    std::string from, std::string to,
+    std::unordered_map<std::string, std::vector<std::string>> const& adjacency_lists,
+    std::unordered_map<std::string, std::vector<std::string>> const& routes_of_stop)
+{
+  if (routes_of_stop.find(from) == routes_of_stop.end())
+    crash(from + ": no such stop.");
+  if (routes_of_stop.find(to) == routes_of_stop.end())
+    crash(to + ": no such stop.");
 }
 
 int main(int argc, char** argv)
@@ -213,6 +225,8 @@ int main(int argc, char** argv)
       }
     }
   }
+  else
+    plotRouteFromTo(from_stop, to_stop, adjacency_lists, routes_of_stop);
 
   return 0;
 }
