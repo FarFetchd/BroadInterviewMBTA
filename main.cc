@@ -7,12 +7,15 @@
 
 #include "json.hpp"
 
+// ================= BEGIN boring mechanical stuff ============================
+
 void crash(const char* s)
 {
   std::cerr << s << std::endl;
   exit(1);
 }
 
+// (from my file_io.cc bag of tricks; probably came from stackoverflow years ago)
 // trims any trailing newlines (does include other trailing whitespace).
 std::string readStringFile(std::string path)
 {
@@ -34,7 +37,7 @@ std::string apiKey()
   return *key;
 }
 
-static size_t WriteCallback(void* data, size_t size, size_t nmemb, void* usr)
+static size_t curlWriteCallback(void* data, size_t size, size_t nmemb, void* usr)
 {
   ((std::string*)usr)->append((char*)data, size * nmemb);
   return size * nmemb;
@@ -52,7 +55,7 @@ std::string curlMBTA(std::string url)
   list = curl_slist_append(list, auth_header.c_str());
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
   std::string response_body;
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_body);
   CURLcode res = curl_easy_perform(curl);
@@ -60,14 +63,6 @@ std::string curlMBTA(std::string url)
   curl_slist_free_all(list);
 
   return response_body;
-}
-
-void printRouteLongNames(nlohmann::json routes_json)
-{
-  std::cout << "The 'long name' of each route in the MBTA subway system:" << std::endl;
-  for (auto const& item : routes_json["data"])
-    std::cout << item["attributes"]["long_name"].get<std::string>() << std::endl;
-  std::cout << std::endl;
 }
 
 nlohmann::json queryAndParse(std::string url)
@@ -85,6 +80,16 @@ nlohmann::json queryAndParse(std::string url)
     crash("failed to parse JSON response");
   }
   return ret;
+}
+
+// ================= END boring mechanical stuff =============================
+
+void printRouteLongNames(nlohmann::json routes_json)
+{
+  std::cout << "The 'long name' of each route in the MBTA subway system:" << std::endl;
+  for (auto const& item : routes_json["data"])
+    std::cout << item["attributes"]["long_name"].get<std::string>() << std::endl;
+  std::cout << std::endl;
 }
 
 std::vector<std::string> getRouteIDs(nlohmann::json routes_json)
@@ -134,6 +139,8 @@ int main(int argc, char** argv)
   for (std::string route_name : route_ids)
   {
     nlohmann::json stops_json = queryAndParse(route_query_prefix + route_name);
+
+    // track the min/max counts for question 2
     int num_stops = stops_json["data"].size();
     if (num_stops < fewest_stops_count)
     {
@@ -146,9 +153,12 @@ int main(int argc, char** argv)
       most_stops_route = route_name;
     }
 
+    // track multi-route stops for question 2
     std::vector<std::string> cur_route_stops = getStops(stops_json);
     for (std::string stop_name : cur_route_stops)
       routes_of_stop[stop_name].push_back(route_name);
+
+    // build adjacency lists
     for (int i = 0; i < cur_route_stops.size(); i++)
     {
       if (i > 0)
