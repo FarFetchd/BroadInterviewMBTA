@@ -306,6 +306,12 @@ int main(int argc, char** argv)
     std::string to_stop;
     std::getline(std::cin, to_stop);
 
+    if (from_stop == to_stop)
+    {
+      std::cout << "If you're already there, then there's nowhere to go!" << std::endl;
+      continue;
+    }
+
     std::vector<std::string> routes_to_travel = planner.plotRouteFromTo(from_stop, to_stop);
     std::cout << from_stop << " to " << to_stop << " -> ";
     for (std::string route : routes_to_travel)
