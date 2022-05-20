@@ -1,5 +1,7 @@
 #include <fstream>
 #include <iostream>
+#include <queue>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -115,18 +117,97 @@ std::vector<std::string> getStops(nlohmann::json stops_json)
   return ret;
 }
 
+// BFS, tracking backlinks. Returns a map of backlinks:
+// backlinks[backlinks[...[dst]...]] gets you back to src.
+std::unordered_map<std::string, std::string> backlinksBFS(
+    std::unordered_map<std::string, std::vector<std::string>>& adjacency_lists,
+    std::string src, std::string dst)
+{
+  std::unordered_map<std::string, std::string> backlinks;
+  std::unordered_set<std::string> visited;
+  std::queue<std::string> to_visit;
+  to_visit.push(src);
+  while (!to_visit.empty() && to_visit.front() != dst)
+  {
+    std::string cur = to_visit.front();
+    to_visit.pop();
+    visited.insert(cur);
+    for (std::string const& neighbor : adjacency_lists[cur])
+    {
+      if (visited.contains(neighbor))
+        continue;
+      to_visit.push(neighbor);
+      backlinks[neighbor] = cur;
+    }
+  }
+  if (to_visit.empty())
+    crash("Can't get to "+src+" from "+dst);
+  return backlinks;
+}
+
+std::pair<std::string, int> greedilyStayOnRoute(
+    std::vector<std::string> const& stops, int stop_index,
+    std::unordered_map<std::string, std::set<std::string>>& routes_of_stop)
+{
+  std::set<std::string> candidates = routes_of_stop[stops[stop_index++]];
+  while (true)
+  {
+    std::set<std::string> new_candidates;
+    std::set_intersection(candidates.begin(), candidates.end(),
+                          routes_of_stop[stops[stop_index]].begin(),
+                          routes_of_stop[stops[stop_index]].end(),
+                          std::inserter(new_candidates, new_candidates.begin()));
+    if (stop_index >= stops.size() - 1 || new_candidates.empty())
+      return std::make_pair(*candidates.begin(), stop_index);
+    stop_index++;
+  }
+}
+
 // This would become a method of a class that loads in adjacency_lists and
 // routes_of_stop at construction, if this was going to evolve beyond a job
 // interview code sample thingy.
-void plotRouteFromTo(
-    std::string from, std::string to,
-    std::unordered_map<std::string, std::vector<std::string>> const& adjacency_lists,
-    std::unordered_map<std::string, std::vector<std::string>> const& routes_of_stop)
+std::vector<std::string> plotRouteFromTo(
+    std::string src, std::string dst,
+    std::unordered_map<std::string, std::vector<std::string>>& adjacency_lists,
+    std::unordered_map<std::string, std::set<std::string>>& routes_of_stop)
 {
-  if (routes_of_stop.find(from) == routes_of_stop.end())
-    crash(from + ": no such stop.");
-  if (routes_of_stop.find(to) == routes_of_stop.end())
-    crash(to + ": no such stop.");
+  if (!routes_of_stop.contains(src))
+    crash(src + ": no such stop.");
+  if (!routes_of_stop.contains(dst))
+    crash(dst + ": no such stop.");
+
+  std::unordered_map<std::string, std::string> backlinks = backlinksBFS(adjacency_lists, src, dst);
+
+  // assemble path from backlinks
+  std::vector<std::string> our_path;
+  std::string cur_hop = dst;
+  do
+  {
+    our_path.push_back(cur_hop);
+    cur_hop = backlinks[cur_hop];
+  } while (cur_hop != src);
+  our_path.push_back(cur_hop);
+  std::reverse(our_path.begin(), our_path.end());
+
+  // We have our_path in stops. Now, to convert stops to routes, let's greedily
+  // stay on the same starting route as long as possible. Set intersection will
+  // tell us what routes are viable, as well as when we are forced to switch.
+  int stop_index = 0;
+  std::vector<std::string> routes_to_travel;
+  while (stop_index < our_path.size() - 1)
+  {
+    auto [route_name, next_stop_ind] = greedilyStayOnRoute(our_path, stop_index, routes_of_stop);
+    stop_index = next_stop_ind;
+    routes_to_travel.push_back(route_name);
+  }
+
+
+  std::cout<<"DEBUG:"<<std::endl;
+  for(auto x : our_path)
+    std::cout<<x<<std::endl;
+
+
+  return routes_to_travel;
 }
 
 int main(int argc, char** argv)
@@ -156,7 +237,7 @@ int main(int argc, char** argv)
   // the edges of the MBTA graph (stops being nodes), as adjacency list.
   std::unordered_map<std::string, std::vector<std::string>> adjacency_lists;
   // which routes does this stop appear in? e.g. Downtown Crossing maps to {red, orange}.
-  std::unordered_map<std::string, std::vector<std::string>> routes_of_stop;
+  std::unordered_map<std::string, std::set<std::string>> routes_of_stop;
 
   int most_stops_count = 0;
   std::string most_stops_route;
@@ -182,7 +263,7 @@ int main(int argc, char** argv)
     // track multi-route stops for question 2
     std::vector<std::string> cur_route_stops = getStops(stops_json);
     for (std::string stop_name : cur_route_stops)
-      routes_of_stop[stop_name].push_back(route_name);
+      routes_of_stop[stop_name].insert(route_name);
 
     // build adjacency lists
     for (int i = 0; i < cur_route_stops.size(); i++)
@@ -226,7 +307,14 @@ int main(int argc, char** argv)
     }
   }
   else
-    plotRouteFromTo(from_stop, to_stop, adjacency_lists, routes_of_stop);
+  {
+    std::vector<std::string> routes_to_travel =
+        plotRouteFromTo(from_stop, to_stop, adjacency_lists, routes_of_stop);
+    std::cout << from_stop << " to " << to_stop << " -> ";
+    for (std::string route : routes_to_travel)
+      std::cout << route << ", ";
+    std::cout << std::endl;
+  }
 
   return 0;
 }
