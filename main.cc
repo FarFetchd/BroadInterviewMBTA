@@ -60,15 +60,19 @@ std::string curlMBTA(std::string url)
   return response_body;
 }
 
-void queryRoutes()
+void printRouteLongNames(nlohmann::json routes_json)
 {
-  std::string response_body = curlMBTA("https://api-v3.mbta.com/routes?filter[type]=0,1");
+  for (auto& item : routes_json["data"])
+    std::cout << item["attributes"]["long_name"].get<std::string>() << std::endl;
+}
 
+nlohmann::json queryRoutes()
+{
+  std::string response_body = curlMBTA("https://api-v3.mbta.com/routes?filter[type]=0,1&include=line");
+  nlohmann::json ret;
   try
   {
-    nlohmann::json json = nlohmann::json::parse(response_body);
-    for (auto& item : json["data"])
-      std::cout << item["attributes"]["long_name"].get<std::string>() << std::endl;
+    ret = nlohmann::json::parse(response_body);
   }
   catch(const std::exception& e)
   {
@@ -76,10 +80,15 @@ void queryRoutes()
               << response_body << std::endl;
     crash("failed to parse JSON response");
   }
+  return ret;
 }
 
 int main(int argc, char** argv)
 {
-  queryRoutes();
+  nlohmann::json routes_json = queryRoutes();
+  printRouteLongNames(routes_json);
+//   std::cout << routes_json.dump() << std::endl;
+
+  std::cout << curlMBTA("https://api-v3.mbta.com/stops?filter[route]=Blue") << std::endl;
   return 0;
 }
